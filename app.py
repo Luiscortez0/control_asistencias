@@ -102,7 +102,7 @@ if st.session_state.logged_in:
                     st.dataframe(df)
 
             elif opcion == "Agregar registros":
-                tabla = st.selectbox("¿A qué tabla deseas agregar?", ["alumnos", "profesores", "materias"])
+                tabla = st.selectbox("¿A qué tabla deseas agregar?", ["alumnos", "profesores", "materias", "clases", "alumnos_clases"])
                 if tabla == "alumnos":
                     with st.form("agregar_alumno"):
                         no_cuenta_nuevo = st.number_input("Número de cuenta", min_value=10000000, max_value=99999999)
