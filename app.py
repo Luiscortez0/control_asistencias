@@ -77,7 +77,7 @@ if st.session_state.logged_in:
 
             elif opcion == "Ver materias":
                 cursor.execute("SELECT * FROM materias ORDER BY id_materia")
-                st.dataframe(pd.DataFrame(cursor.fetchall(), columns=["ID Materia", "Nombre", "Carrera", "Grado", "Créditos"]))
+                st.dataframe(pd.DataFrame(cursor.fetchall(), columns=["ID Materia", "Nombre", "Carrera", "Grado", "Creditos"]))
 
             elif opcion == "Agregar registros":
                 tabla = st.selectbox("¿A qué tabla deseas agregar?", ["alumnos", "profesores", "materias"])
