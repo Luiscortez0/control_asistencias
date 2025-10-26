@@ -64,7 +64,7 @@ if st.session_state.logged_in:
 
             opcion = st.sidebar.selectbox(
                 "Selecciona una acción",
-                ["Ver alumnos", "Ver profesores", "Ver materias", "Ver clases", "Agregar registros", "Editar asistencias"]
+                ["Ver alumnos", "Ver profesores", "Ver materias", "Ver clases", "Ver alumnos/clase", "Agregar registros"]
             )
 
             if opcion == "Ver alumnos":
@@ -88,6 +88,18 @@ if st.session_state.logged_in:
                     ORDER BY c.id_clase
                 """)
                 st.dataframe(pd.DataFrame(cursor.fetchall(), columns=["ID Clase", "Materia", "Grupo", "Profesor"]))
+
+            elif opcion == "Ver alumnos/clase":
+                clase_id = st.number_input("ID de clase", min_value=1)
+                if st.button("Ver alumnos"):
+                    cursor.execute("""
+                        SELECT a.no_cuenta, a.nombre, asis.estado, asis.fecha
+                        FROM asistencias asis
+                        JOIN alumnos a ON a.no_cuenta = asis.no_cuenta_alumno
+                        WHERE asis.id_clase = %s
+                    """, (clase_id,))
+                    df = pd.DataFrame(cursor.fetchall(), columns=["No. Cuenta", "Alumno", "Estado", "Fecha"])
+                    st.dataframe(df)
 
             elif opcion == "Agregar registros":
                 tabla = st.selectbox("¿A qué tabla deseas agregar?", ["alumnos", "profesores", "materias"])
