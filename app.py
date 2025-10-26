@@ -39,7 +39,12 @@ if st.button("Iniciar sesión"):
         cursor = conn.cursor()
 
         tabla = "alumnos" if rol == "Alumno" else "profesores"
-        cursor.execute(f"SELECT nombre, password FROM {tabla} WHERE no_cuenta = %s", (no_cuenta,))
+        #cursor.execute(f"SELECT nombre, password FROM {tabla} WHERE no_cuenta = %s", (no_cuenta,))
+        if rol == "Administrador":
+            cursor.execute("SELECT nombre, password FROM administradores WHERE usuario = %s", (no_cuenta,))
+        else:
+            tabla = "alumnos" if rol == "Alumno" else "profesores"
+            cursor.execute(f"SELECT nombre, password FROM {tabla} WHERE no_cuenta = %s", (no_cuenta,))
         user = cursor.fetchone()
 
         if not user:
