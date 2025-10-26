@@ -79,6 +79,16 @@ if st.session_state.logged_in:
                 cursor.execute("SELECT * FROM materias ORDER BY id_materia")
                 st.dataframe(pd.DataFrame(cursor.fetchall(), columns=["ID Materia", "Nombre", "Carrera", "Grado", "Creditos"]))
 
+            elif opcion == "Ver clases":
+                cursor.execute("""
+                    SELECT c.id_clase, m.nombre AS materia, c.grupo, p.nombre AS profesor
+                    FROM clases c
+                    JOIN materias m ON c.id_materia = m.id_materia
+                    JOIN profesores p ON c.no_cuenta_maestro = p.no_cuenta
+                    ORDER BY c.id_clase
+                """)
+                st.dataframe(pd.DataFrame(cursor.fetchall(), columns=["ID Clase", "Materia", "Grupo", "Profesor"]))
+
             elif opcion == "Agregar registros":
                 tabla = st.selectbox("¿A qué tabla deseas agregar?", ["alumnos", "profesores", "materias"])
                 if tabla == "alumnos":
@@ -158,7 +168,7 @@ if st.session_state.logged_in:
 # =====================================
 else:
     rol = st.selectbox("Selecciona tu rol", ["Alumno", "Profesor", "Administrador"])
-    no_cuenta = st.text_input("Número de cuenta o usuario")
+    no_cuenta = st.text_input("Número de cuenta")
     password = st.text_input("Contraseña", type="password")
 
     if st.button("Iniciar sesión"):
@@ -169,7 +179,8 @@ else:
             if rol == "Administrador":
                 cursor.execute("SELECT nombre, password FROM administradores WHERE usuario = %s", (no_cuenta,))
             else:
-                cursor.execute(f"SELECT nombre, password FROM {rol.lower()} WHERE no_cuenta = %s", (no_cuenta,))
+                tabla = "alumnos" if rol == "Alumno" else "profesores"
+                cursor.execute(f"SELECT nombre, password FROM {tabla} WHERE no_cuenta = %s", (no_cuenta,))
             user = cursor.fetchone()
 
             if not user:
