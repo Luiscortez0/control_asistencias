@@ -110,3 +110,15 @@ ALTER TABLE profesores ADD COLUMN password VARCHAR(255);
 UPDATE alumnos SET password = '1234';
 UPDATE profesores SET password = 'abcd';
 -- ============================================
+
+CREATE TABLE administradores (
+  id SERIAL PRIMARY KEY,
+  nombre VARCHAR(100) NOT NULL,
+  usuario VARCHAR(50) UNIQUE NOT NULL,
+  password VARCHAR(255) NOT NULL
+);
+
+-- Ejemplo de usuario inicial
+INSERT INTO administradores (nombre, usuario, password)
+VALUES ('Admin General', 'admin', 'xJEQJ');
+-- ============================================ 
