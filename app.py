@@ -134,29 +134,42 @@ if st.session_state.logged_in:
             clases = pd.DataFrame(cursor.fetchall(), columns=["ID Clase", "Materia", "Grupo"])
             st.dataframe(clases)
 
-            st.subheader("🧾 Editar asistencias")
+            st.subheader("🧾 Registrar asistencias")
+
             clase_id = st.number_input("ID de clase", min_value=1)
             if st.button("Ver alumnos"):
+                # Traer alumnos asignados a la clase
                 cursor.execute("""
-                    SELECT a.no_cuenta, a.nombre, asis.estado, asis.fecha
-                    FROM asistencias asis
-                    JOIN alumnos a ON a.no_cuenta = asis.no_cuenta_alumno
-                    WHERE asis.id_clase = %s
+                    SELECT a.no_cuenta, a.nombre
+                    FROM alumnos_clases al_cl
+                    JOIN alumnos a ON a.no_cuenta = al_cl.no_cuenta_alumno
+                    WHERE al_cl.id_clase = %s
                 """, (clase_id,))
-                df = pd.DataFrame(cursor.fetchall(), columns=["No. Cuenta", "Alumno", "Estado", "Fecha"])
-                st.dataframe(df)
+                df = pd.DataFrame(cursor.fetchall(), columns=["No. Cuenta", "Alumno"])
 
-                if not df.empty:
-                    alumno_id = st.selectbox("Selecciona alumno", df["No. Cuenta"])
-                    nuevo_estado = st.selectbox("Nuevo estado", ["Presente", "Ausente", "Justificado"])
-                    if st.button("Actualizar estado"):
-                        cursor.execute("""
-                            UPDATE asistencias
-                            SET estado=%s
-                            WHERE no_cuenta_alumno=%s AND id_clase=%s
-                        """, (nuevo_estado, alumno_id, clase_id))
-                        conn.commit()
-                        st.success("✅ Asistencia actualizada.")
+                if df.empty:
+                    st.warning("⚠️ No hay alumnos asignados a esta clase.")
+                else:
+                    st.dataframe(df)
+
+                    # Crear formulario de registro de asistencia
+                    with st.form("registro_asistencia"):
+                        alumno_id = st.selectbox("Selecciona alumno", df["No. Cuenta"])
+                        estado = st.selectbox("Estado de asistencia", ["Presente", "Ausente", "Justificado"])
+                        fecha = st.date_input("Fecha de asistencia")
+                        hora = st.time_input("Hora", value=pd.Timestamp.now().time())
+
+                        enviar = st.form_submit_button("Registrar asistencia")
+                        if enviar:
+                            try:
+                                cursor.execute("""
+                                    INSERT INTO asistencias (no_cuenta_alumno, id_clase, fecha, hora, estado)
+                                    VALUES (%s, %s, %s, %s, %s)
+                                """, (alumno_id, clase_id, fecha, hora, estado))
+                                conn.commit()
+                                st.success("✅ Asistencia registrada correctamente.")
+                            except Exception as e:
+                                st.error(f"Error al registrar asistencia: {e}")
 
         elif rol == "Alumno":
             st.subheader("📘 Tus asistencias")
