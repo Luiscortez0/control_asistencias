@@ -121,6 +121,62 @@ if st.session_state.logged_in:
                             """, (no_cuenta_nuevo, nombre, carrera, grado, grupo, edad, correo, password))
                             conn.commit()
                             st.success("✅ Alumno agregado correctamente.")
+                if tabla == "profesores":
+                    with st.form("agregar_profesor"):
+                        no_cuenta_nuevo = st.number_input("Número de cuenta", min_value=10000000, max_value=99999999)
+                        nombre = st.text_input("Nombre completo")
+                        facultad = st.text_input("Facultad")
+                        carrera = st.text_input("Carrera")
+                        correo = st.text_input("Correo")
+                        password = st.text_input("Contraseña")
+                        enviar = st.form_submit_button("Guardar")
+                        if enviar:
+                            cursor.execute("""
+                                INSERT INTO profesores (no_cuenta, nombre, facultad, carrera, correo, password)
+                                VALUES (%s,%s,%s,%s,%s,%s)
+                            """, (no_cuenta_nuevo, nombre, facultad, carrera, correo, password))
+                            conn.commit()
+                            st.success("✅ Profesor agregado correctamente.")
+                if tabla == "materias":
+                    with st.form("agregar_materia"):
+                        id_materia = st.text_input("ID de materia", min_value=1)
+                        nombre = st.text_input("Nombre de la materia")
+                        carrera = st.text_input("Carrera")
+                        grado = st.number_input("Grado", min_value=1, max_value=10)
+                        creditos = st.number_input("Créditos", min_value=1, max_value=10)
+                        enviar = st.form_submit_button("Guardar")
+                        if enviar:
+                            cursor.execute("""
+                                INSERT INTO materias (id_materia, nombre, carrera, grado, creditos)
+                                VALUES (%s,%s,%s,%s,%s)
+                            """, (id_materia, nombre, carrera, grado, creditos))
+                            conn.commit()
+                            st.success("✅ Materia agregada correctamente.")
+                if tabla == "clases":
+                    with st.form("agregar_clase"):
+                        no_cuenta_maestro = st.number_input("Número de cuenta del profesor", min_value=10000000, max_value=99999999)
+                        id_materia = st.number_input("ID de materia", min_value=1)
+                        grupo = st.text_input("Grupo", max_chars=1)
+                        enviar = st.form_submit_button("Guardar")
+                        if enviar:
+                            cursor.execute("""
+                                INSERT INTO clases (no_cuenta_maestro, id_materia, grupo)
+                                VALUES (%s,%s,%s)
+                            """, (no_cuenta_maestro, id_materia, grupo))
+                            conn.commit()
+                            st.success("✅ Clase agregada correctamente.")
+                if tabla == "alumnos_clases":
+                    with st.form("agregar_alumno_clase"):
+                        no_cuenta_alumno = st.number_input("Número de cuenta del alumno", min_value=10000000, max_value=99999999)
+                        id_clase = st.number_input("ID de clase", min_value=1)
+                        enviar = st.form_submit_button("Guardar")
+                        if enviar:
+                            cursor.execute("""
+                                INSERT INTO alumnos_clases (no_cuenta_alumno, id_clase)
+                                VALUES (%s,%s)
+                            """, (no_cuenta_alumno, id_clase))
+                            conn.commit()
+                            st.success("✅ Alumno asignado a la clase correctamente.")
 
         elif rol == "Profesor":
             st.subheader("📚 Tus clases")
