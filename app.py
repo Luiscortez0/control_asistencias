@@ -137,39 +137,49 @@ if st.session_state.logged_in:
             st.subheader("🧾 Registrar asistencias")
 
             clase_id = st.number_input("ID de clase", min_value=1)
+
+            # Evita recargar al mostrar alumnos
+            if "mostrar_alumnos" not in st.session_state:
+                st.session_state.mostrar_alumnos = False
+
             if st.button("Ver alumnos"):
-                # Traer alumnos asignados a la clase
+                st.session_state.mostrar_alumnos = True
+                st.session_state.clase_id = clase_id
+                st.rerun()
+
+            # Si el profesor ya presionó "Ver alumnos"
+            if st.session_state.mostrar_alumnos and "clase_id" in st.session_state:
+                clase_id = st.session_state.clase_id
                 cursor.execute("""
                     SELECT a.no_cuenta, a.nombre
                     FROM alumnos_clases al_cl
                     JOIN alumnos a ON a.no_cuenta = al_cl.no_cuenta_alumno
                     WHERE al_cl.id_clase = %s
                 """, (clase_id,))
-                df = pd.DataFrame(cursor.fetchall(), columns=["No. Cuenta", "Alumno"])
+                alumnos = pd.DataFrame(cursor.fetchall(), columns=["No. Cuenta", "Alumno"])
 
-                if df.empty:
+                if alumnos.empty:
                     st.warning("⚠️ No hay alumnos asignados a esta clase.")
                 else:
-                    st.dataframe(df)
+                    st.dataframe(alumnos)
 
-                    # Crear formulario de registro de asistencia
-                    with st.form("registro_asistencia"):
-                        alumno_id = st.selectbox("Selecciona alumno", df["No. Cuenta"])
-                        estado = st.selectbox("Estado de asistencia", ["Presente", "Ausente", "Justificado"])
-                        fecha = st.date_input("Fecha de asistencia")
-                        hora = st.time_input("Hora", value=pd.Timestamp.now().time())
+                    st.write("### 🗓️ Registrar nueva asistencia")
 
-                        enviar = st.form_submit_button("Registrar asistencia")
-                        if enviar:
-                            try:
-                                cursor.execute("""
-                                    INSERT INTO asistencias (no_cuenta_alumno, id_clase, fecha, hora, estado)
-                                    VALUES (%s, %s, %s, %s, %s)
-                                """, (alumno_id, clase_id, fecha, hora, estado))
-                                conn.commit()
-                                st.success("✅ Asistencia registrada correctamente.")
-                            except Exception as e:
-                                st.error(f"Error al registrar asistencia: {e}")
+                    alumno_id = st.selectbox("Selecciona alumno", alumnos["No. Cuenta"])
+                    estado = st.selectbox("Estado de asistencia", ["Presente", "Ausente", "Justificado"])
+                    fecha = st.date_input("Fecha de asistencia")
+                    hora = st.time_input("Hora", pd.Timestamp.now().time())
+
+                    if st.button("Registrar asistencia"):
+                        try:
+                            cursor.execute("""
+                                INSERT INTO asistencias (no_cuenta_alumno, id_clase, fecha, hora, estado)
+                                VALUES (%s, %s, %s, %s, %s)
+                            """, (alumno_id, clase_id, fecha, hora, estado))
+                            conn.commit()
+                            st.success("✅ Asistencia registrada correctamente.")
+                        except Exception as e:
+                            st.error(f"❌ Error al registrar la asistencia: {e}")
 
         elif rol == "Alumno":
             st.subheader("📘 Tus asistencias")
