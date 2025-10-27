@@ -155,7 +155,7 @@ if st.session_state.logged_in:
                 if tabla == "clases":
                     with st.form("agregar_clase"):
                         no_cuenta_maestro = st.number_input("Número de cuenta del profesor", min_value=10000000, max_value=99999999)
-                        id_materia = st.number_input("ID de materia", min_value=1)
+                        id_materia = st.text_input("ID de materia", max_chars=8)
                         grupo = st.text_input("Grupo", max_chars=1)
                         enviar = st.form_submit_button("Guardar")
                         if enviar:
