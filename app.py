@@ -139,7 +139,7 @@ if st.session_state.logged_in:
                             st.success("✅ Profesor agregado correctamente.")
                 if tabla == "materias":
                     with st.form("agregar_materia"):
-                        id_materia = st.text_input("ID de materia", min_value=1)
+                        id_materia = st.text_input("ID de materia", min_value=10000000, max_value=99999999)
                         nombre = st.text_input("Nombre de la materia")
                         carrera = st.text_input("Carrera")
                         grado = st.number_input("Grado", min_value=1, max_value=10)
