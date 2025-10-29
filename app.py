@@ -207,12 +207,13 @@ if st.session_state.logged_in:
             if st.session_state.mostrar_alumnos and "clase_id" in st.session_state:
                 clase_id = st.session_state.clase_id
                 cursor.execute("""
-                    SELECT a.no_cuenta, a.nombre
+                    SELECT a.no_cuenta, a.nombre, COUNT(asis.estado) AS total_asistencias
                     FROM alumnos_clases al_cl
                     JOIN alumnos a ON a.no_cuenta = al_cl.no_cuenta_alumno
+                    LEFT JOIN asistencias asis ON asis.no_cuenta_alumno = a.no_cuenta AND asis.id_clase = al_cl.id_clase
                     WHERE al_cl.id_clase = %s
                 """, (clase_id,))
-                alumnos = pd.DataFrame(cursor.fetchall(), columns=["No. Cuenta", "Alumno"])
+                alumnos = pd.DataFrame(cursor.fetchall(), columns=["No. Cuenta", "Alumno", "Total Asistencias"])
 
                 if alumnos.empty:
                     st.warning("⚠️ No hay alumnos asignados a esta clase.")
