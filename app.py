@@ -212,7 +212,7 @@ if st.session_state.logged_in:
                     JOIN alumnos a ON a.no_cuenta = al_cl.no_cuenta_alumno
                     WHERE al_cl.id_clase = %s
                 """, (clase_id,))
-                alumnos = pd.DataFrame(cursor.fetchall(), columns=["No. Cuenta", "Alumno", "Total Asistencias"])
+                alumnos = pd.DataFrame(cursor.fetchall(), columns=["No. Cuenta", "Alumno"])
 
                 if alumnos.empty:
                     st.warning("⚠️ No hay alumnos asignados a esta clase.")
@@ -286,3 +286,4 @@ else:
                 st.error("❌ Contraseña incorrecta.")
         except Exception as e:
             st.error(f"Error al conectar: {e}")
+
