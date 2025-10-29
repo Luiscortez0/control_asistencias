@@ -207,11 +207,21 @@ if st.session_state.logged_in:
             if st.session_state.mostrar_alumnos and "clase_id" in st.session_state:
                 clase_id = st.session_state.clase_id
                 cursor.execute("""
-                    SELECT a.no_cuenta, a.nombre, COUNT(*) FROM asistencias asis
+                    SELECT 
+                        a.no_cuenta,
+                        a.nombre,
+                        (
+                            SELECT COUNT(*) 
+                            FROM asistencias asis
+                            WHERE asis.no_cuenta_alumno = a.no_cuenta 
+                            AND asis.id_clase = al_cl.id_clase
+                        ) AS total_asistencias
                     FROM alumnos_clases al_cl
                     JOIN alumnos a ON a.no_cuenta = al_cl.no_cuenta_alumno
                     WHERE al_cl.id_clase = %s
+                    ORDER BY a.nombre
                 """, (clase_id,))
+                
                 alumnos = pd.DataFrame(cursor.fetchall(), columns=["No. Cuenta", "Alumno", "Total Asistencias"])
 
                 if alumnos.empty:
