@@ -194,52 +194,45 @@ if st.session_state.logged_in:
 
             clase_id = st.number_input("ID de clase", min_value=1)
 
-            # Estado persistente para mostrar la tabla de alumnos
+            # Estado persistente para mostrar alumnos del grupo
             if "mostrar_grupo" not in st.session_state:
                 st.session_state.mostrar_grupo = False
 
-            if st.button("Cargar alumnos de la clase"):
+            if st.button("Cargar alumnos"):
                 st.session_state.mostrar_grupo = True
                 st.session_state.clase_id = clase_id
                 st.rerun()
 
+            # Si ya cargó los alumnos
             if st.session_state.mostrar_grupo and "clase_id" in st.session_state:
                 clase_id = st.session_state.clase_id
                 
-                # Obtener alumnos
                 cursor.execute("""
                     SELECT a.no_cuenta, a.nombre
                     FROM alumnos_clases al_cl
                     JOIN alumnos a ON a.no_cuenta = al_cl.no_cuenta_alumno
                     WHERE al_cl.id_clase = %s
                 """, (clase_id,))
-                
+
                 alumnos = pd.DataFrame(cursor.fetchall(), columns=["No. Cuenta", "Alumno"])
 
                 if alumnos.empty:
-                    st.warning("⚠️ Esta clase no tiene alumnos asignados.")
+                    st.warning("⚠️ No hay alumnos en esta clase.")
                 else:
-                    # Agregar columna editable para el estado
-                    alumnos["Estado"] = "Presente"   # por defecto
+                    # Agregar la columna Estado editable
+                    alumnos["Estado"] = "Presente"
 
                     st.write("### Marca la asistencia del grupo:")
-                    tabla_editable = st.data_editor(
-                        alumnos,
-                        num_rows="dynamic",
-                        columns={
-                            "Estado": st.column_config.SelectboxColumn(
-                                "Estado",
-                                options=["Presente", "Ausente", "Justificado"]
-                            )
-                        }
-                    )
+
+                    # Tabla editable SIN 'columns'
+                    tabla = st.data_editor(alumnos)
 
                     fecha = st.date_input("Fecha")
-                    hora = st.time_input("Hora", pd.Timestamp.now().time())
+                    hora = st.time_input("Hora")
 
                     if st.button("Registrar asistencias del grupo"):
                         try:
-                            for index, row in tabla_editable.iterrows():
+                            for _, row in tabla.iterrows():
                                 cursor.execute("""
                                     INSERT INTO asistencias (no_cuenta_alumno, id_clase, fecha, hora, estado)
                                     VALUES (%s, %s, %s, %s, %s)
@@ -251,7 +244,7 @@ if st.session_state.logged_in:
                                     row["Estado"]
                                 ))
                             conn.commit()
-                            st.success("✅ Asistencias del grupo registradas correctamente.")
+                            st.success("✅ Asistencias registradas correctamente.")
                         except Exception as e:
                             st.error(f"❌ Error al registrar: {e}")
 
