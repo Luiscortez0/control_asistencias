@@ -180,7 +180,6 @@ if st.session_state.logged_in:
 
         elif rol == "Profesor":
             st.subheader("📚 Tus clases")
-
             query = """
                 SELECT c.id_clase, m.nombre AS materia, c.grupo
                 FROM clases c
@@ -191,20 +190,20 @@ if st.session_state.logged_in:
             clases = pd.DataFrame(cursor.fetchall(), columns=["ID Clase", "Materia", "Grupo"])
             st.dataframe(clases)
 
-            st.subheader("🧾 Registrar asistencias del grupo")
+            st.subheader("🧾 Registrar asistencias (modo detallado)")
 
             clase_id = st.number_input("ID de clase", min_value=1)
 
-            # Ver alumnos de la clase
-            if "mostrar_lista" not in st.session_state:
-                st.session_state.mostrar_lista = False
+            # Control para no recargar los alumnos
+            if "lista_grupo" not in st.session_state:
+                st.session_state.lista_grupo = False
 
-            if st.button("Cargar lista de alumnos"):
-                st.session_state.mostrar_lista = True
+            if st.button("Cargar alumnos"):
+                st.session_state.lista_grupo = True
                 st.session_state.clase_id = clase_id
                 st.rerun()
 
-            if st.session_state.mostrar_lista and "clase_id" in st.session_state:
+            if st.session_state.lista_grupo:
                 clase_id = st.session_state.clase_id
 
                 cursor.execute("""
@@ -213,44 +212,51 @@ if st.session_state.logged_in:
                     JOIN alumnos a ON a.no_cuenta = al_cl.no_cuenta_alumno
                     WHERE al_cl.id_clase = %s
                 """, (clase_id,))
+                
                 alumnos = cursor.fetchall()
 
                 if not alumnos:
-                    st.warning("⚠️ No hay alumnos asignados a esta clase.")
+                    st.warning("⚠️ No hay alumnos en esta clase.")
                 else:
-                    st.write("### Lista de alumnos:")
+                    st.write("### Selecciona la asistencia de cada alumno:")
 
-                    # Guardar estados en session_state si no existen
-                    if "estados_asistencia" not in st.session_state:
-                        st.session_state.estados_asistencia = {
-                            alumno[0]: "Presente" for alumno in alumnos
-                        }
+                    # Inicializar diccionario de sesion si no existe
+                    if "asistencias_temp" not in st.session_state:
+                        st.session_state.asistencias_temp = {}
 
-                    # Mostrar un selectbox por cada alumno
-                    for no_cuenta_alumno, nombre in alumnos:
-                        st.session_state.estados_asistencia[no_cuenta_alumno] = st.selectbox(
-                            f"{nombre} ({no_cuenta_alumno})",
+                    for no_cuenta_alumno, nombre_alumno in alumnos:
+                        key = f"asistencia_{no_cuenta_alumno}"
+
+                        # Estado seleccionado previamente o "Presente"
+                        valor_inicial = st.session_state.asistencias_temp.get(key, "Presente")
+
+                        seleccion = st.selectbox(
+                            f"{no_cuenta_alumno} - {nombre_alumno}",
                             ["Presente", "Ausente", "Justificado"],
-                            key=f"select_{no_cuenta_alumno}",
-                            index=["Presente", "Ausente", "Justificado"].index(
-                                st.session_state.estados_asistencia[no_cuenta_alumno]
-                            )
+                            key=key,
+                            index=["Presente", "Ausente", "Justificado"].index(valor_inicial)
                         )
 
-                    fecha = st.date_input("Fecha de asistencia")
-                    hora = st.time_input("Hora", pd.Timestamp.now().time())
+                        # Guardar selección en cache
+                        st.session_state.asistencias_temp[key] = seleccion
+
+                    fecha = st.date_input("Fecha")
+                    hora = st.time_input("Hora")
 
                     if st.button("Registrar asistencias del grupo"):
                         try:
-                            for no_cuenta_alumno, estado in st.session_state.estados_asistencia.items():
+                            for no_cuenta_alumno, _ in alumnos:
+                                estado = st.session_state.asistencias_temp[f"asistencia_{no_cuenta_alumno}"]
+
                                 cursor.execute("""
                                     INSERT INTO asistencias (no_cuenta_alumno, id_clase, fecha, hora, estado)
                                     VALUES (%s, %s, %s, %s, %s)
                                 """, (no_cuenta_alumno, clase_id, fecha, hora, estado))
 
                             conn.commit()
-                            st.success("✅ Asistencias del grupo registradas correctamente.")
 
+                            st.success("✅ Todas las asistencias fueron registradas correctamente.")
+                        
                         except Exception as e:
                             st.error(f"❌ Error al registrar: {e}")
 
