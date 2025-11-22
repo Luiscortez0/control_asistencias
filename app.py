@@ -180,6 +180,7 @@ if st.session_state.logged_in:
 
         elif rol == "Profesor":
             st.subheader("📚 Tus clases")
+
             query = """
                 SELECT c.id_clase, m.nombre AS materia, c.grupo
                 FROM clases c
@@ -190,61 +191,66 @@ if st.session_state.logged_in:
             clases = pd.DataFrame(cursor.fetchall(), columns=["ID Clase", "Materia", "Grupo"])
             st.dataframe(clases)
 
-            st.subheader("🧾 Registrar asistencias (modo grupal)")
+            st.subheader("🧾 Registrar asistencias del grupo")
 
             clase_id = st.number_input("ID de clase", min_value=1)
 
-            # Estado persistente para mostrar alumnos del grupo
-            if "mostrar_grupo" not in st.session_state:
-                st.session_state.mostrar_grupo = False
+            # Ver alumnos de la clase
+            if "mostrar_lista" not in st.session_state:
+                st.session_state.mostrar_lista = False
 
-            if st.button("Cargar alumnos"):
-                st.session_state.mostrar_grupo = True
+            if st.button("Cargar lista de alumnos"):
+                st.session_state.mostrar_lista = True
                 st.session_state.clase_id = clase_id
                 st.rerun()
 
-            # Si ya cargó los alumnos
-            if st.session_state.mostrar_grupo and "clase_id" in st.session_state:
+            if st.session_state.mostrar_lista and "clase_id" in st.session_state:
                 clase_id = st.session_state.clase_id
-                
+
                 cursor.execute("""
                     SELECT a.no_cuenta, a.nombre
                     FROM alumnos_clases al_cl
                     JOIN alumnos a ON a.no_cuenta = al_cl.no_cuenta_alumno
                     WHERE al_cl.id_clase = %s
                 """, (clase_id,))
+                alumnos = cursor.fetchall()
 
-                alumnos = pd.DataFrame(cursor.fetchall(), columns=["No. Cuenta", "Alumno"])
-
-                if alumnos.empty:
-                    st.warning("⚠️ No hay alumnos en esta clase.")
+                if not alumnos:
+                    st.warning("⚠️ No hay alumnos asignados a esta clase.")
                 else:
-                    # Agregar la columna Estado editable
-                    alumnos["Estado"] = "Presente"
+                    st.write("### Lista de alumnos:")
 
-                    st.write("### Marca la asistencia del grupo:")
+                    # Guardar estados en session_state si no existen
+                    if "estados_asistencia" not in st.session_state:
+                        st.session_state.estados_asistencia = {
+                            alumno[0]: "Presente" for alumno in alumnos
+                        }
 
-                    # Tabla editable SIN 'columns'
-                    tabla = st.data_editor(alumnos)
+                    # Mostrar un selectbox por cada alumno
+                    for no_cuenta_alumno, nombre in alumnos:
+                        st.session_state.estados_asistencia[no_cuenta_alumno] = st.selectbox(
+                            f"{nombre} ({no_cuenta_alumno})",
+                            ["Presente", "Ausente", "Justificado"],
+                            key=f"select_{no_cuenta_alumno}",
+                            index=["Presente", "Ausente", "Justificado"].index(
+                                st.session_state.estados_asistencia[no_cuenta_alumno]
+                            )
+                        )
 
-                    fecha = st.date_input("Fecha")
-                    hora = st.time_input("Hora")
+                    fecha = st.date_input("Fecha de asistencia")
+                    hora = st.time_input("Hora", pd.Timestamp.now().time())
 
                     if st.button("Registrar asistencias del grupo"):
                         try:
-                            for _, row in tabla.iterrows():
+                            for no_cuenta_alumno, estado in st.session_state.estados_asistencia.items():
                                 cursor.execute("""
                                     INSERT INTO asistencias (no_cuenta_alumno, id_clase, fecha, hora, estado)
                                     VALUES (%s, %s, %s, %s, %s)
-                                """, (
-                                    int(row["No. Cuenta"]),
-                                    clase_id,
-                                    fecha,
-                                    hora,
-                                    row["Estado"]
-                                ))
+                                """, (no_cuenta_alumno, clase_id, fecha, hora, estado))
+
                             conn.commit()
-                            st.success("✅ Asistencias registradas correctamente.")
+                            st.success("✅ Asistencias del grupo registradas correctamente.")
+
                         except Exception as e:
                             st.error(f"❌ Error al registrar: {e}")
 
