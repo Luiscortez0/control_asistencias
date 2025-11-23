@@ -201,9 +201,11 @@ if st.session_state.logged_in:
             if st.button("Cargar alumnos"):
                 st.session_state.lista_grupo = True
                 st.session_state.clase_id = clase_id
+                # limpiamos dataframe temporal al cambiar de clase
+                st.session_state.pop("asistencias_df", None)
                 st.rerun()
 
-            if st.session_state.lista_grupo:
+            if st.session_state.get("lista_grupo", False):
                 clase_id = st.session_state.clase_id
 
                 cursor.execute("""
@@ -218,35 +220,56 @@ if st.session_state.logged_in:
                 if not alumnos:
                     st.warning("⚠️ No hay alumnos en esta clase.")
                 else:
-                    st.write("### Selecciona la asistencia de cada alumno:")
+                    st.write("### Marca la asistencia del grupo:")
 
-                    # Inicializar diccionario de sesion si no existe
-                    if "asistencias_temp" not in st.session_state:
-                        st.session_state.asistencias_temp = {}
+                    # Creamos/recuperamos el dataframe de asistencias en sesión
+                    if "asistencias_df" not in st.session_state:
+                        # alumnos = [(no_cuenta, nombre), ...]
+                        df = pd.DataFrame(alumnos, columns=["NoCuenta", "Nombre"])
+                        # Por defecto: todos presentes, no justificados
+                        df["Asiste"] = True
+                        df["Justificado"] = False
+                        st.session_state.asistencias_df = df
 
-                    for no_cuenta_alumno, nombre_alumno in alumnos:
-                        key = f"asistencia_{no_cuenta_alumno}"
+                    # Editor de tabla con checkboxes
+                    df_editado = st.data_editor(
+                        st.session_state.asistencias_df,
+                        num_rows="fixed",  # no permitir agregar/eliminar filas
+                        key="editor_asistencias",
+                        column_config={
+                            "Asiste": st.column_config.CheckboxColumn(
+                                "Asiste",
+                                help="Marca si el alumno asistió",
+                                default=True
+                            ),
+                            "Justificado": st.column_config.CheckboxColumn(
+                                "Justificado",
+                                help="Marca si la falta está justificada (solo si no asistió)",
+                                default=False
+                            )
+                        },
+                        hide_index=True
+                    )
 
-                        # Estado seleccionado previamente o "Presente"
-                        valor_inicial = st.session_state.asistencias_temp.get(key, "Presente")
-
-                        seleccion = st.selectbox(
-                            f"{no_cuenta_alumno} - {nombre_alumno}",
-                            ["Presente", "Ausente", "Justificado"],
-                            key=key,
-                            index=["Presente", "Ausente", "Justificado"].index(valor_inicial)
-                        )
-
-                        # Guardar selección en cache
-                        st.session_state.asistencias_temp[key] = seleccion
+                    # Actualizar en sesión (para conservar cambios al rerun)
+                    st.session_state.asistencias_df = df_editado
 
                     fecha = st.date_input("Fecha")
                     hora = st.time_input("Hora")
 
                     if st.button("Registrar asistencias del grupo"):
                         try:
-                            for no_cuenta_alumno, _ in alumnos:
-                                estado = st.session_state.asistencias_temp[f"asistencia_{no_cuenta_alumno}"]
+                            for _, row in df_editado.iterrows():
+                                no_cuenta_alumno = row["NoCuenta"]
+
+                                # Lógica de estado según checkboxes
+                                if row["Asiste"]:
+                                    estado = "Presente"
+                                else:
+                                    if row["Justificado"]:
+                                        estado = "Justificado"
+                                    else:
+                                        estado = "Ausente"
 
                                 cursor.execute("""
                                     INSERT INTO asistencias (no_cuenta_alumno, id_clase, fecha, hora, estado)
@@ -254,7 +277,6 @@ if st.session_state.logged_in:
                                 """, (no_cuenta_alumno, clase_id, fecha, hora, estado))
 
                             conn.commit()
-
                             st.success("✅ Todas las asistencias fueron registradas correctamente.")
                         
                         except Exception as e:
