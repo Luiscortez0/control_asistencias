@@ -201,13 +201,22 @@ if st.session_state.logged_in:
             if st.button("Cargar alumnos"):
                 st.session_state.lista_grupo = True
                 st.session_state.clase_id = clase_id
-                # limpiamos dataframe temporal al cambiar de clase
                 st.session_state.pop("asistencias_df", None)
                 st.rerun()
 
             if st.session_state.get("lista_grupo", False):
                 clase_id = st.session_state.clase_id
 
+                # Obtener nombre de la materia
+                cursor.execute("""
+                    SELECT m.nombre 
+                    FROM clases c
+                    JOIN materias m ON c.id_materia = m.id_materia
+                    WHERE c.id_clase = %s
+                """, (clase_id,))
+                materia_nombre = cursor.fetchone()[0]
+
+                # Obtener alumnos
                 cursor.execute("""
                     SELECT a.no_cuenta, a.nombre
                     FROM alumnos_clases al_cl
@@ -222,54 +231,43 @@ if st.session_state.logged_in:
                 else:
                     st.write("### Marca la asistencia del grupo:")
 
-                    # Creamos/recuperamos el dataframe de asistencias en sesión
+                    # Crear dataframe temporal si no existe
                     if "asistencias_df" not in st.session_state:
-                        # alumnos = [(no_cuenta, nombre), ...]
                         df = pd.DataFrame(alumnos, columns=["NoCuenta", "Nombre"])
-                        # Por defecto: todos presentes, no justificados
                         df["Asiste"] = True
                         df["Justificado"] = False
                         st.session_state.asistencias_df = df
 
-                    # Editor de tabla con checkboxes
                     df_editado = st.data_editor(
                         st.session_state.asistencias_df,
-                        num_rows="fixed",  # no permitir agregar/eliminar filas
+                        num_rows="fixed",
                         key="editor_asistencias",
                         column_config={
                             "Asiste": st.column_config.CheckboxColumn(
-                                "Asiste",
-                                help="Marca si el alumno asistió",
-                                default=True
-                            ),
+                                "Asiste", help="Marca si el alumno asistió", default=True),
                             "Justificado": st.column_config.CheckboxColumn(
-                                "Justificado",
-                                help="Marca si la falta está justificada (solo si no asistió)",
-                                default=False
-                            )
+                                "Justificado", help="Marca si la falta fue justificada", default=False)
                         },
                         hide_index=True
                     )
 
-                    # Actualizar en sesión (para conservar cambios al rerun)
                     st.session_state.asistencias_df = df_editado
 
                     fecha = st.date_input("Fecha")
                     hora = st.time_input("Hora")
 
+                    # -------------------------------
+                    #   REGISTRO DE ASISTENCIAS
+                    # -------------------------------
                     if st.button("Registrar asistencias del grupo"):
                         try:
                             for _, row in df_editado.iterrows():
                                 no_cuenta_alumno = row["NoCuenta"]
 
-                                # Lógica de estado según checkboxes
                                 if row["Asiste"]:
                                     estado = "Presente"
                                 else:
-                                    if row["Justificado"]:
-                                        estado = "Justificado"
-                                    else:
-                                        estado = "Ausente"
+                                    estado = "Justificado" if row["Justificado"] else "Ausente"
 
                                 cursor.execute("""
                                     INSERT INTO asistencias (no_cuenta_alumno, id_clase, fecha, hora, estado)
@@ -281,6 +279,63 @@ if st.session_state.logged_in:
                         
                         except Exception as e:
                             st.error(f"❌ Error al registrar: {e}")
+
+
+                    # ============================================================
+                    #   EXPORTAR ASISTENCIAS A EXCEL (CON NOMBRE MATERIA + DOCENTE)
+                    # ============================================================
+                    st.write("### 📤 Exportar asistencias a Excel")
+
+                    if st.button("Descargar Excel de asistencias"):
+                        try:
+                            cursor.execute("""
+                                SELECT a.no_cuenta, al.nombre, a.estado, a.fecha, a.hora
+                                FROM asistencias a
+                                JOIN alumnos al ON al.no_cuenta = a.no_cuenta_alumno
+                                WHERE a.id_clase = %s
+                                ORDER BY a.fecha DESC, al.nombre
+                            """, (clase_id,))
+
+                            asist_df = pd.DataFrame(cursor.fetchall(), 
+                                columns=["No. Cuenta", "Alumno", "Estado", "Fecha", "Hora"])
+
+                            if asist_df.empty:
+                                st.warning("⚠️ No hay asistencias registradas para exportar.")
+                            else:
+                                import io
+                                from openpyxl import Workbook
+
+                                # Crear excel
+                                output = io.BytesIO()
+                                wb = Workbook()
+                                ws = wb.active
+
+                                # ENCABEZADO
+                                ws["A1"] = "Reporte de Asistencias"
+                                ws["A2"] = f"Materia: {materia_nombre}"
+                                ws["A3"] = f"Profesor: {st.session_state.nombre}"
+                                ws["A5"] = "Listado de Asistencias"
+
+                                # Insertar DataFrame
+                                for col_idx, col_name in enumerate(asist_df.columns, start=1):
+                                    ws.cell(row=7, column=col_idx, value=col_name)
+
+                                for row_idx, row in asist_df.iterrows():
+                                    for col_idx, value in enumerate(row, start=1):
+                                        ws.cell(row=row_idx + 8, column=col_idx, value=value)
+
+                                wb.save(output)
+                                excel_data = output.getvalue()
+
+                                st.download_button(
+                                    label="📥 Descargar archivo Excel",
+                                    data=excel_data,
+                                    file_name=f"Asistencias_{materia_nombre}.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                )
+
+                        except Exception as e:
+                            st.error(f"❌ Error al exportar: {e}")
 
         elif rol == "Alumno":
             st.subheader("📘 Tus asistencias")
