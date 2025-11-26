@@ -319,7 +319,7 @@ if st.session_state.logged_in:
 
                                 # 4) Crear Excel en memoria con encabezado personalizado
                                 output = io.BytesIO()
-                                with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+                                with pd.ExcelWriter(output, engine="openpyxl") as writer:
                                     df_export.to_excel(
                                         writer,
                                         sheet_name="Asistencias",
