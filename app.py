@@ -281,7 +281,7 @@ if st.session_state.logged_in:
                             st.error(f"❌ Error al registrar: {e}")
 
                     # ============================================================
-                    #   EXPORTAR ASISTENCIAS A EXCEL (CON NOMBRE MATERIA + DOCENTE)
+                    #   EXPORTAR ASISTENCIAS A EXCEL (SIN openpyxl NI xlsxwriter)
                     # ============================================================
                     st.write("### 📤 Exportar asistencias a Excel")
 
@@ -305,25 +305,24 @@ if st.session_state.logged_in:
                                 import io
                                 output = io.BytesIO()
 
-                                # Crear el Excel usando XlsxWriter
-                                with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+                                # Pandas generará el Excel con el motor disponible automáticamente
+                                with pd.ExcelWriter(output, engine=None) as writer:
                                     
-                                    # Hoja principal
-                                    asist_df.to_excel(writer, index=False, sheet_name="Asistencias", startrow=5)
+                                    # Escribir encabezado manual arriba del dataframe
+                                    header_df = pd.DataFrame({
+                                        "Reporte": [
+                                            "Reporte de Asistencias",
+                                            f"Materia: {materia_nombre}",
+                                            f"Profesor: {st.session_state.nombre}",
+                                            "",
+                                            "Listado de asistencias:"
+                                        ]
+                                    })
 
-                                    workbook  = writer.book
-                                    worksheet = writer.sheets["Asistencias"]
+                                    header_df.to_excel(writer, index=False, header=False, sheet_name="Asistencias")
 
-                                    # --- ENCABEZADO ---
-                                    worksheet.write("A1", "Reporte de Asistencias")
-                                    worksheet.write("A2", f"Materia: {materia_nombre}")
-                                    worksheet.write("A3", f"Profesor: {st.session_state.nombre}")
-                                    worksheet.write("A4", "Listado de asistencias:")
-
-                                    # Auto-ajustar columnas
-                                    for i, col in enumerate(asist_df.columns):
-                                        max_len = max(asist_df[col].astype(str).map(len).max(), len(col))
-                                        worksheet.set_column(i, i, max_len + 2)
+                                    # Escribir la tabla desde la fila 6 (row=5 => 0-based)
+                                    asist_df.to_excel(writer, index=False, sheet_name="Asistencias", startrow=6)
 
                                 excel_data = output.getvalue()
 
