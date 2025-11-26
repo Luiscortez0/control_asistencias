@@ -2,6 +2,7 @@ import streamlit as st
 import psycopg2
 import pandas as pd
 import bcrypt
+import io
 
 # =====================================
 # CONFIGURACIÓN INICIAL
@@ -201,22 +202,13 @@ if st.session_state.logged_in:
             if st.button("Cargar alumnos"):
                 st.session_state.lista_grupo = True
                 st.session_state.clase_id = clase_id
+                # limpiamos dataframe temporal al cambiar de clase
                 st.session_state.pop("asistencias_df", None)
                 st.rerun()
 
             if st.session_state.get("lista_grupo", False):
                 clase_id = st.session_state.clase_id
 
-                # Obtener nombre de la materia
-                cursor.execute("""
-                    SELECT m.nombre 
-                    FROM clases c
-                    JOIN materias m ON c.id_materia = m.id_materia
-                    WHERE c.id_clase = %s
-                """, (clase_id,))
-                materia_nombre = cursor.fetchone()[0]
-
-                # Obtener alumnos
                 cursor.execute("""
                     SELECT a.no_cuenta, a.nombre
                     FROM alumnos_clases al_cl
@@ -231,43 +223,54 @@ if st.session_state.logged_in:
                 else:
                     st.write("### Marca la asistencia del grupo:")
 
-                    # Crear dataframe temporal si no existe
+                    # Creamos/recuperamos el dataframe de asistencias en sesión
                     if "asistencias_df" not in st.session_state:
+                        # alumnos = [(no_cuenta, nombre), ...]
                         df = pd.DataFrame(alumnos, columns=["NoCuenta", "Nombre"])
+                        # Por defecto: todos presentes, no justificados
                         df["Asiste"] = True
                         df["Justificado"] = False
                         st.session_state.asistencias_df = df
 
+                    # Editor de tabla con checkboxes
                     df_editado = st.data_editor(
                         st.session_state.asistencias_df,
-                        num_rows="fixed",
+                        num_rows="fixed",  # no permitir agregar/eliminar filas
                         key="editor_asistencias",
                         column_config={
                             "Asiste": st.column_config.CheckboxColumn(
-                                "Asiste", help="Marca si el alumno asistió", default=True),
+                                "Asiste",
+                                help="Marca si el alumno asistió",
+                                default=True
+                            ),
                             "Justificado": st.column_config.CheckboxColumn(
-                                "Justificado", help="Marca si la falta fue justificada", default=False)
+                                "Justificado",
+                                help="Marca si la falta está justificada (solo si no asistió)",
+                                default=False
+                            )
                         },
                         hide_index=True
                     )
 
+                    # Actualizar en sesión (para conservar cambios al rerun)
                     st.session_state.asistencias_df = df_editado
 
                     fecha = st.date_input("Fecha")
                     hora = st.time_input("Hora")
 
-                    # -------------------------------
-                    #   REGISTRO DE ASISTENCIAS
-                    # -------------------------------
                     if st.button("Registrar asistencias del grupo"):
                         try:
                             for _, row in df_editado.iterrows():
                                 no_cuenta_alumno = row["NoCuenta"]
 
+                                # Lógica de estado según checkboxes
                                 if row["Asiste"]:
                                     estado = "Presente"
                                 else:
-                                    estado = "Justificado" if row["Justificado"] else "Ausente"
+                                    if row["Justificado"]:
+                                        estado = "Justificado"
+                                    else:
+                                        estado = "Ausente"
 
                                 cursor.execute("""
                                     INSERT INTO asistencias (no_cuenta_alumno, id_clase, fecha, hora, estado)
@@ -280,61 +283,70 @@ if st.session_state.logged_in:
                         except Exception as e:
                             st.error(f"❌ Error al registrar: {e}")
 
-                    # ============================================================
-                    #   EXPORTAR ASISTENCIAS A EXCEL (SIN openpyxl NI xlsxwriter)
-                    # ============================================================
-                    st.write("### 📤 Exportar asistencias a Excel")
+                    # 🔹🔹🔹 EXPORTAR ASISTENCIAS A EXCEL 🔹🔹🔹
+                    st.markdown("---")
+                    st.subheader("⬇️ Exportar asistencias de esta clase a Excel")
 
-                    if st.button("Descargar Excel de asistencias"):
+                    if st.button("Generar archivo Excel de asistencias"):
                         try:
+                            # 1) Obtener nombre de la materia de la clase seleccionada
+                            materia = ""
+                            if not clases.empty:
+                                fila_clase = clases[clases["ID Clase"] == clase_id]
+                                if not fila_clase.empty:
+                                    materia = fila_clase.iloc[0]["Materia"]
+
+                            # 2) Nombre del profesor (ajusta al nombre que guardes en sesión)
+                            nombre_profesor = st.session_state.get("nombre", "Profesor")
+
+                            # 3) Consultar asistencias de esa clase
                             cursor.execute("""
-                                SELECT a.no_cuenta_alumno, al.nombre, a.estado, a.fecha, a.hora
-                                FROM asistencias a
-                                JOIN alumnos al ON al.no_cuenta = a.no_cuenta_alumno
-                                WHERE a.id_clase = %s
-                                ORDER BY a.fecha DESC, al.nombre
+                                SELECT a.no_cuenta, a.nombre AS alumno, asis.fecha, asis.hora, asis.estado
+                                FROM asistencias asis
+                                JOIN alumnos a ON a.no_cuenta = asis.no_cuenta_alumno
+                                WHERE asis.id_clase = %s
+                                ORDER BY asis.fecha, asis.hora, a.nombre
                             """, (clase_id,))
+                            registros = cursor.fetchall()
 
-                            asist_rows = cursor.fetchall()
-                            asist_df = pd.DataFrame(asist_rows,
-                                columns=["No. Cuenta", "Alumno", "Estado", "Fecha", "Hora"])
-
-                            if asist_df.empty:
-                                st.warning("⚠️ No hay asistencias registradas para exportar.")
+                            if not registros:
+                                st.warning("⚠️ Aún no hay asistencias registradas para esta clase.")
                             else:
-                                import io
+                                df_export = pd.DataFrame(
+                                    registros,
+                                    columns=["NoCuenta", "Alumno", "Fecha", "Hora", "Estado"]
+                                )
+
+                                # 4) Crear Excel en memoria con encabezado personalizado
                                 output = io.BytesIO()
+                                with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+                                    df_export.to_excel(
+                                        writer,
+                                        sheet_name="Asistencias",
+                                        index=False,
+                                        startrow=4  # dejamos filas arriba para el encabezado
+                                    )
 
-                                # Pandas generará el Excel con el motor disponible automáticamente
-                                with pd.ExcelWriter(output, engine=None) as writer:
-                                    
-                                    # Escribir encabezado manual arriba del dataframe
-                                    header_df = pd.DataFrame({
-                                        "Reporte": [
-                                            "Reporte de Asistencias",
-                                            f"Materia: {materia_nombre}",
-                                            f"Profesor: {st.session_state.nombre}",
-                                            "",
-                                            "Listado de asistencias:"
-                                        ]
-                                    })
+                                    workbook = writer.book
+                                    worksheet = writer.sheets["Asistencias"]
 
-                                    header_df.to_excel(writer, index=False, header=False, sheet_name="Asistencias")
+                                    # Encabezado arriba
+                                    worksheet.write(0, 0, f"Profesor: {nombre_profesor}")
+                                    worksheet.write(1, 0, f"Materia: {materia}")
+                                    worksheet.write(2, 0, f"ID Clase: {clase_id}")
 
-                                    # Escribir la tabla desde la fila 6 (row=5 => 0-based)
-                                    asist_df.to_excel(writer, index=False, sheet_name="Asistencias", startrow=6)
+                                output.seek(0)
 
-                                excel_data = output.getvalue()
-
+                                # 5) Botón de descarga
                                 st.download_button(
-                                    label="📥 Descargar archivo Excel",
-                                    data=excel_data,
-                                    file_name=f"Asistencias_{materia_nombre}.xlsx",
+                                    label="📥 Descargar Excel de asistencias",
+                                    data=output,
+                                    file_name=f"asistencias_clase_{clase_id}.xlsx",
                                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                 )
 
                         except Exception as e:
-                            st.error(f"❌ Error al exportar: {e}")
+                            st.error(f"❌ Error al generar Excel: {e}")
 
         elif rol == "Alumno":
             st.subheader("📘 Tus asistencias")
