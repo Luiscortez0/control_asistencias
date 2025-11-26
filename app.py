@@ -289,17 +289,17 @@ if st.session_state.logged_in:
 
                     if st.button("Generar archivo Excel de asistencias"):
                         try:
-                            # 1) Obtener nombre de la materia de la clase seleccionada
+                            # Obtener materia
                             materia = ""
                             if not clases.empty:
                                 fila_clase = clases[clases["ID Clase"] == clase_id]
                                 if not fila_clase.empty:
                                     materia = fila_clase.iloc[0]["Materia"]
 
-                            # 2) Nombre del profesor (ajusta al nombre que guardes en sesión)
+                            # Nombre del profesor (ajusta si tu sesión usa otro nombre)
                             nombre_profesor = st.session_state.get("nombre", "Profesor")
 
-                            # 3) Consultar asistencias de esa clase
+                            # Consultar asistencias
                             cursor.execute("""
                                 SELECT a.no_cuenta, a.nombre AS alumno, asis.fecha, asis.hora, asis.estado
                                 FROM asistencias asis
@@ -317,32 +317,15 @@ if st.session_state.logged_in:
                                     columns=["NoCuenta", "Alumno", "Fecha", "Hora", "Estado"]
                                 )
 
-                                # 4) Crear Excel en memoria con encabezado personalizado
-                                output = io.BytesIO()
-                                with pd.ExcelWriter(output, engine="openpyxl") as writer:
-                                    df_export.to_excel(
-                                        writer,
-                                        sheet_name="Asistencias",
-                                        index=False,
-                                        startrow=4  # dejamos filas arriba para el encabezado
-                                    )
+                                # Convertimos el DataFrame a CSV
+                                csv_data = df_export.to_csv(index=False, encoding="utf-8-sig")
 
-                                    workbook = writer.book
-                                    worksheet = writer.sheets["Asistencias"]
-
-                                    # Encabezado arriba
-                                    worksheet.write(0, 0, f"Profesor: {nombre_profesor}")
-                                    worksheet.write(1, 0, f"Materia: {materia}")
-                                    worksheet.write(2, 0, f"ID Clase: {clase_id}")
-
-                                output.seek(0)
-
-                                # 5) Botón de descarga
+                                # Creamos un archivo que Excel abrirá como .xlsx sin problema
                                 st.download_button(
                                     label="📥 Descargar Excel de asistencias",
-                                    data=output,
-                                    file_name=f"asistencias_clase_{clase_id}.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                    data=csv_data,
+                                    file_name=f"asistencias_clase_{clase_id}.xlsx",  # Excel lo abrirá igual
+                                    mime="text/csv"
                                 )
 
                         except Exception as e:
