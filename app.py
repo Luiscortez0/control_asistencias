@@ -280,7 +280,6 @@ if st.session_state.logged_in:
                         except Exception as e:
                             st.error(f"❌ Error al registrar: {e}")
 
-
                     # ============================================================
                     #   EXPORTAR ASISTENCIAS A EXCEL (CON NOMBRE MATERIA + DOCENTE)
                     # ============================================================
@@ -289,14 +288,15 @@ if st.session_state.logged_in:
                     if st.button("Descargar Excel de asistencias"):
                         try:
                             cursor.execute("""
-                                SELECT a.no_cuenta, al.nombre, a.estado, a.fecha, a.hora
+                                SELECT a.no_cuenta_alumno, al.nombre, a.estado, a.fecha, a.hora
                                 FROM asistencias a
                                 JOIN alumnos al ON al.no_cuenta = a.no_cuenta_alumno
                                 WHERE a.id_clase = %s
                                 ORDER BY a.fecha DESC, al.nombre
                             """, (clase_id,))
 
-                            asist_df = pd.DataFrame(cursor.fetchall(), 
+                            asist_rows = cursor.fetchall()
+                            asist_df = pd.DataFrame(asist_rows,
                                 columns=["No. Cuenta", "Alumno", "Estado", "Fecha", "Hora"])
 
                             if asist_df.empty:
@@ -304,8 +304,9 @@ if st.session_state.logged_in:
                             else:
                                 import io
                                 from openpyxl import Workbook
+                                from openpyxl.utils import get_column_letter
 
-                                # Crear excel
+                                # Crear excel en memoria
                                 output = io.BytesIO()
                                 wb = Workbook()
                                 ws = wb.active
@@ -316,13 +317,23 @@ if st.session_state.logged_in:
                                 ws["A3"] = f"Profesor: {st.session_state.nombre}"
                                 ws["A5"] = "Listado de Asistencias"
 
-                                # Insertar DataFrame
+                                # Cabeceras de la tabla en la fila 7
                                 for col_idx, col_name in enumerate(asist_df.columns, start=1):
                                     ws.cell(row=7, column=col_idx, value=col_name)
 
-                                for row_idx, row in asist_df.iterrows():
-                                    for col_idx, value in enumerate(row, start=1):
-                                        ws.cell(row=row_idx + 8, column=col_idx, value=value)
+                                # Escribir filas a partir de la fila 8
+                                for r_idx, row in enumerate(asist_df.itertuples(index=False, name=None), start=8):
+                                    for c_idx, value in enumerate(row, start=1):
+                                        ws.cell(row=r_idx, column=c_idx, value=value)
+
+                                # (Opcional) auto-ajustar ancho de columnas básico
+                                for i, col in enumerate(asist_df.columns, start=1):
+                                    max_length = max(
+                                        (len(str(cell.value)) if cell.value is not None else 0)
+                                        for cell in ws[get_column_letter(i)]
+                                    )
+                                    adjusted_width = (max_length + 2)
+                                    ws.column_dimensions[get_column_letter(i)].width = adjusted_width
 
                                 wb.save(output)
                                 excel_data = output.getvalue()
