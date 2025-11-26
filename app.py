@@ -289,17 +289,17 @@ if st.session_state.logged_in:
 
                     if st.button("Generar archivo Excel de asistencias"):
                         try:
-                            # Obtener materia
+                            # 1) Obtener nombre de la materia de la clase seleccionada
                             materia = ""
                             if not clases.empty:
                                 fila_clase = clases[clases["ID Clase"] == clase_id]
                                 if not fila_clase.empty:
                                     materia = fila_clase.iloc[0]["Materia"]
 
-                            # Nombre del profesor (ajusta si tu sesión usa otro nombre)
+                            # 2) Nombre del profesor (ajusta al nombre que guardes en sesión)
                             nombre_profesor = st.session_state.get("nombre", "Profesor")
 
-                            # Consultar asistencias
+                            # 3) Consultar asistencias de esa clase
                             cursor.execute("""
                                 SELECT a.no_cuenta, a.nombre AS alumno, asis.fecha, asis.hora, asis.estado
                                 FROM asistencias asis
@@ -317,19 +317,30 @@ if st.session_state.logged_in:
                                     columns=["NoCuenta", "Alumno", "Fecha", "Hora", "Estado"]
                                 )
 
-                                # Convertimos el DataFrame a CSV
-                                csv_data = df_export.to_csv(index=False, encoding="utf-8-sig")
+                                # 4) Encabezado arriba (profesor, materia, id clase)
+                                encabezado = [
+                                    f"Profesor: {nombre_profesor}",
+                                    f"Materia: {materia}",
+                                    f"ID Clase: {clase_id}",
+                                    ""  # línea en blanco
+                                ]
 
-                                # Creamos un archivo que Excel abrirá como .xlsx sin problema
+                                # 5) Cuerpo del CSV (la tabla)
+                                csv_body = df_export.to_csv(index=False)
+
+                                # Unimos encabezado + tabla
+                                csv_data = "\n".join(encabezado) + "\n" + csv_body
+
+                                # 6) Botón de descarga (como .csv para que Excel no se queje)
                                 st.download_button(
-                                    label="📥 Descargar Excel de asistencias",
+                                    label="📥 Descargar asistencias (CSV para Excel)",
                                     data=csv_data,
-                                    file_name=f"asistencias_clase_{clase_id}.xlsx",  # Excel lo abrirá igual
+                                    file_name=f"asistencias_clase_{clase_id}.csv",
                                     mime="text/csv"
                                 )
 
                         except Exception as e:
-                            st.error(f"❌ Error al generar Excel: {e}")
+                            st.error(f"❌ Error al generar archivo: {e}")
 
         elif rol == "Alumno":
             st.subheader("📘 Tus asistencias")
