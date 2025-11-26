@@ -303,39 +303,28 @@ if st.session_state.logged_in:
                                 st.warning("⚠️ No hay asistencias registradas para exportar.")
                             else:
                                 import io
-                                from openpyxl import Workbook
-                                from openpyxl.utils import get_column_letter
-
-                                # Crear excel en memoria
                                 output = io.BytesIO()
-                                wb = Workbook()
-                                ws = wb.active
 
-                                # ENCABEZADO
-                                ws["A1"] = "Reporte de Asistencias"
-                                ws["A2"] = f"Materia: {materia_nombre}"
-                                ws["A3"] = f"Profesor: {st.session_state.nombre}"
-                                ws["A5"] = "Listado de Asistencias"
+                                # Crear el Excel usando XlsxWriter
+                                with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+                                    
+                                    # Hoja principal
+                                    asist_df.to_excel(writer, index=False, sheet_name="Asistencias", startrow=5)
 
-                                # Cabeceras de la tabla en la fila 7
-                                for col_idx, col_name in enumerate(asist_df.columns, start=1):
-                                    ws.cell(row=7, column=col_idx, value=col_name)
+                                    workbook  = writer.book
+                                    worksheet = writer.sheets["Asistencias"]
 
-                                # Escribir filas a partir de la fila 8
-                                for r_idx, row in enumerate(asist_df.itertuples(index=False, name=None), start=8):
-                                    for c_idx, value in enumerate(row, start=1):
-                                        ws.cell(row=r_idx, column=c_idx, value=value)
+                                    # --- ENCABEZADO ---
+                                    worksheet.write("A1", "Reporte de Asistencias")
+                                    worksheet.write("A2", f"Materia: {materia_nombre}")
+                                    worksheet.write("A3", f"Profesor: {st.session_state.nombre}")
+                                    worksheet.write("A4", "Listado de asistencias:")
 
-                                # (Opcional) auto-ajustar ancho de columnas básico
-                                for i, col in enumerate(asist_df.columns, start=1):
-                                    max_length = max(
-                                        (len(str(cell.value)) if cell.value is not None else 0)
-                                        for cell in ws[get_column_letter(i)]
-                                    )
-                                    adjusted_width = (max_length + 2)
-                                    ws.column_dimensions[get_column_letter(i)].width = adjusted_width
+                                    # Auto-ajustar columnas
+                                    for i, col in enumerate(asist_df.columns):
+                                        max_len = max(asist_df[col].astype(str).map(len).max(), len(col))
+                                        worksheet.set_column(i, i, max_len + 2)
 
-                                wb.save(output)
                                 excel_data = output.getvalue()
 
                                 st.download_button(
